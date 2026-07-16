@@ -23,9 +23,9 @@ The server listens on http://127.0.0.1:3000/.
 
 ## Endpoints
 
-| Method | Path            | Response (text/plain)                   |
-| ------ | --------------- | --------------------------------------- |
-| GET    | `/`             | `Hello, World!` (with trailing newline) |
-| GET    | `/good-evening` | `Good evening`                          |
+| Method | Path            | Status | Response (text/plain)                   |
+| ------ | --------------- | ------ | --------------------------------------- |
+| GET    | `/`             | `200`  | `Hello, World!` (with trailing newline) |
+| GET    | `/good-evening` | `200`  | `Good evening` (no trailing newline)    |
 
 Requests to unmatched paths return Express's default `404 Not Found`.
