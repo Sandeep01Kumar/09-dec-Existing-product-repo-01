@@ -168,7 +168,7 @@ These are all the lines the server can print:
 - `Invalid PORT value "<value>". PORT must be an integer between 1024 and 65535.`: stderr, when the `PORT` value is rejected; the process then exits with status 1.
 - `Failed to start server: port <PORT> is already in use (EADDRINUSE).`: stderr, when the port is taken; the process then exits with status 1.
 - `Failed to start server: <error message>`: stderr, when the port cannot be bound for any reason other than a port already in use; the process then exits with status 1.
-- `Request handling failed: <error message>`: stderr, when handling a request throws; the process keeps serving, and the client is answered `500 Internal Server Error` containing none of the message.
+- `Request handling failed: <error message>`: stderr, when handling a request throws; the process keeps serving, and the client is answered `500 Internal Server Error` containing none of the message. The 500 is only possible before any of the response has been sent: a throw that happens after a response has begun writes nothing further to it and closes the unfinished connection instead.
 
 ## Shutdown
 
