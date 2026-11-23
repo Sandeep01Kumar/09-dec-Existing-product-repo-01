@@ -8,9 +8,9 @@ This project is a small Node.js HTTP server you can read from top to bottom in a
 The server:
 
 - answers `GET /hello` with the plain-text body `Hello world`;
-- answers every other request with status `404` and the plain-text body `Not Found`;
-- prints one line in the terminal for every request it receives;
-- reads its port from the `PORT` environment variable, falling back to `3000`;
+- answers every request that matches no route with status `404` and the plain-text body `Not Found`;
+- prints one line in the terminal for every request it handles;
+- reads its port from the `PORT` environment variable, defaulting to `3000` when `PORT` is not set;
 - shuts down cleanly when you press CTRL+C.
 
 It is a tutorial, not a production template: it has no database, no authentication and no external services.
@@ -56,7 +56,7 @@ The server keeps running in that terminal until you stop it (see Shutdown). Leav
 
 ## Testing
 
-These commands use `curl`, which is available on macOS and Linux by default. With the server running on port 3000, run each one in a second terminal. The `-i` flag makes curl print the response status line and headers as well as the body.
+These commands use `curl` (or an equivalent HTTP client), which this section needs and the server itself does not. It ships with macOS, most Linux distributions and Windows 10 and later; if it is missing, the `curl` package installs from your system package manager. With the server running on port 3000, run each one in a second terminal. The `-i` flag makes curl print the response status line and headers as well as the body.
 
 Request the one route the server implements:
 
@@ -118,13 +118,15 @@ When the server starts, it prints one line on stdout:
 Server listening on port 3000
 ```
 
-Every request adds one more line, written before the request is answered:
+Every request the handler receives adds one more line, written before the request is answered:
 
 ```text
 2026-11-23T10:53:10.957Z GET /hello
 2026-11-23T10:53:10.969Z GET /invalid
 2026-11-23T10:53:10.975Z POST /hello
 ```
+
+A request Node.js rejects while parsing it — an unrecognised method token, a malformed request line, or a header block larger than Node.js's 16 KB limit — is answered by Node.js itself with `400 Bad Request` or `431 Request Header Fields Too Large`, never reaches the handler, and adds no line.
 
 The parts of a request line are, in order: the time of the request as an ISO-8601 UTC timestamp with milliseconds (produced by `new Date().toISOString()`), the HTTP method, and the request path exactly as the client sent it, query string included.
 
@@ -141,7 +143,7 @@ Transfer-Encoding: chunked
 Hello world
 ```
 
-Every other request returns:
+Every request that matches no route returns:
 
 ```text
 HTTP/1.1 404 Not Found
@@ -154,15 +156,19 @@ Transfer-Encoding: chunked
 Not Found
 ```
 
+A request whose target cannot be parsed as a URL is the one case that does not follow that rule: it is answered `500 Internal Server Error` with the plain-text body `Internal Server Error` and no detail, and the reason is reported to the operator by the `Request handling failed:` line listed below.
+
 The status, the `Content-Type: text/plain` header and the body are what the application guarantees. `Date`, `Connection`, `Keep-Alive` and `Transfer-Encoding` are added by Node.js and can differ between responses.
 
 These are all the lines the server can print:
 
 - `Server listening on port <PORT>`: stdout, once, after the port is bound.
-- `<ISO-8601 timestamp> <METHOD> <request path>`: stdout, once per request, before the response.
+- `<ISO-8601 timestamp> <METHOD> <request path>`: stdout, once per request the handler receives, before the response.
 - `Server shutting down`: stdout, once, when you press CTRL+C.
 - `Invalid PORT value "<value>". PORT must be an integer between 1024 and 65535.`: stderr, when the `PORT` value is rejected; the process then exits with status 1.
 - `Failed to start server: port <PORT> is already in use (EADDRINUSE).`: stderr, when the port is taken; the process then exits with status 1.
+- `Failed to start server: <error message>`: stderr, when the port cannot be bound for any reason other than a port already in use; the process then exits with status 1.
+- `Request handling failed: <error message>`: stderr, when handling a request throws; the process keeps serving, and the client is answered `500 Internal Server Error` containing none of the message.
 
 ## Shutdown
 
@@ -174,11 +180,20 @@ Server shutting down
 
 then closes its connections and exits with status 0. Requests already being answered finish first, and no new connections are accepted once shutdown has begun.
 
-If you started the server in the background, send it the same signal by process id:
+If you started the server in the background, capture its process id when you start it:
 
 ```bash
-kill -INT <pid>
+node server.js &        # start the server in the background
+SERVER_PID=$!           # capture the process id it was given
 ```
+
+Later, still in that terminal, send that process the same signal:
+
+```bash
+kill -INT "$SERVER_PID"   # prints Server shutting down, then exits with status 0
+```
+
+If you did not capture the id when you started it, `pgrep -f "node server.js"` finds it on Linux and macOS.
 
 The shutdown line and the exit status 0 are the same as with CTRL+C.
 
