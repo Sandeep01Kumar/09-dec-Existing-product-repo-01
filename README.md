@@ -135,10 +135,10 @@ The parts of a request line are, in order: the time of the request as an ISO-860
 ```text
 HTTP/1.1 200 OK
 Content-Type: text/plain
+Content-Length: 11
 Date: Mon, 23 Nov 2026 10:53:10 GMT
 Connection: keep-alive
 Keep-Alive: timeout=5
-Transfer-Encoding: chunked
 
 Hello world
 ```
@@ -148,17 +148,17 @@ Every request that matches no route returns:
 ```text
 HTTP/1.1 404 Not Found
 Content-Type: text/plain
+Content-Length: 9
 Date: Mon, 23 Nov 2026 10:53:10 GMT
 Connection: keep-alive
 Keep-Alive: timeout=5
-Transfer-Encoding: chunked
 
 Not Found
 ```
 
 A request whose target cannot be parsed as a URL is the one case that does not follow that rule: it is answered `500 Internal Server Error` with the plain-text body `Internal Server Error` and no detail, and the reason is reported to the operator by the `Request handling failed:` line listed below.
 
-The status, the `Content-Type: text/plain` header and the body are what the application guarantees. `Date`, `Connection`, `Keep-Alive` and `Transfer-Encoding` are added by Node.js and can differ between responses.
+The status, the `Content-Type: text/plain` and `Content-Length` headers and the body are what the application guarantees. `Date`, `Connection` and `Keep-Alive` are added by Node.js and can differ between responses.
 
 These are all the lines the server can print:
 
@@ -178,7 +178,7 @@ Press CTRL+C in the terminal where the server is running. The server prints:
 Server shutting down
 ```
 
-then closes its connections and exits with status 0. Requests already being answered finish first, and no new connections are accepted once shutdown has begun.
+then closes its connections and exits with status 0. Requests already being answered finish first, and no new connections are accepted once shutdown has begun. A connection that never sends a complete request cannot hold the exit either: anything still open about a second after shutdown begins is closed.
 
 If you started the server in the background, capture its process id when you start it:
 
@@ -219,7 +219,7 @@ A rejected value produces a single line on stderr and exit status 1, before any 
 Invalid PORT value "abc". PORT must be an integer between 1024 and 65535.
 ```
 
-The quoted part is the value exactly as it was received, so `PORT=80` reports `Invalid PORT value "80".` and `PORT=` reports `Invalid PORT value "".`.
+The quoted part is the value exactly as it was received, so `PORT=80` reports `Invalid PORT value "80".` and `PORT=` reports `Invalid PORT value "".`. Control characters in the value are printed as escapes such as `\u000a`, so a value containing a line break still produces exactly one line on stderr.
 
 If the port is already in use, the server prints a single line on stderr and exits with status 1:
 

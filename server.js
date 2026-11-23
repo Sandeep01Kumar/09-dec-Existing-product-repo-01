@@ -4,6 +4,7 @@ const DEFAULT_PORT = 3000;
 const MIN_PORT = 1024;
 const MAX_PORT = 65535;
 const HOST = '127.0.0.1';
+const SHUTDOWN_GRACE_MS = 1000;
 
 const ROUTES = Object.freeze([
   Object.freeze({ method: 'GET', path: '/hello', handler: handleHello }),
@@ -18,8 +19,13 @@ function resolvePort(rawValue) {
     return { port: DEFAULT_PORT };
   }
 
+  // Control characters are escaped so a rejected value still prints exactly one stderr line.
+  const received = rawValue.replace(
+    /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`
+  );
   const invalidMessage =
-    `Invalid PORT value "${rawValue}". PORT must be an integer between ${MIN_PORT} and ${MAX_PORT}.`;
+    `Invalid PORT value "${received}". PORT must be an integer between ${MIN_PORT} and ${MAX_PORT}.`;
   const trimmed = rawValue.trim();
 
   // Number('') is 0 and Number('3e3') is 3000, so the digits-only test has to run first:
@@ -41,13 +47,11 @@ function logRequest(req) {
 }
 
 function sendText(res, statusCode, body) {
-  // A response that was already completed must not be written twice; this guard is what
-  // lets the generic 500 fallback run even after a handler has begun its own response.
-  if (res.writableEnded) {
+  if (res.writableEnded || res.headersSent) {
     return;
   }
 
-  res.writeHead(statusCode, { 'Content-Type': 'text/plain' });
+  res.writeHead(statusCode, { 'Content-Type': 'text/plain', 'Content-Length': Buffer.byteLength(body) });
   res.end(body);
 }
 
@@ -79,7 +83,6 @@ function handleRequest(req, res) {
 
     handleNotFound(req, res);
   } catch (error) {
-    // Failure details stay on the server: the client is told only that the request failed.
     console.error(`Request handling failed: ${error.message}`);
     sendText(res, 500, 'Internal Server Error');
   }
@@ -90,13 +93,26 @@ function onListening() {
 }
 
 function onServerError(error) {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`Failed to start server: port ${port} is already in use (EADDRINUSE).`);
-  } else {
-    console.error(`Failed to start server: ${error.message}`);
-  }
+  const message =
+    error.code === 'EADDRINUSE'
+      ? `Failed to start server: port ${port} is already in use (EADDRINUSE).`
+      : `Failed to start server: ${error.message}`;
 
-  process.exit(1);
+  console.error(message);
+  process.exitCode = 1;
+}
+
+function onShutdownComplete() {
+  process.exitCode = 0;
+}
+
+function onShutdownGraceExpired() {
+  // close() stops accepting but keeps open connections, and it also removes the
+  // headersTimeout that would otherwise drop a connection whose request head never
+  // arrived, so ending them here is what keeps the exit from waiting forever.
+  if (typeof server.closeAllConnections === 'function') {
+    server.closeAllConnections();
+  }
 }
 
 function onSigint() {
@@ -106,15 +122,21 @@ function onSigint() {
     return;
   }
 
-  shuttingDown = true;
   console.log('Server shutting down');
-  server.close(() => process.exit(0));
+  shuttingDown = true;
+  server.close(onShutdownComplete);
 
   // Idle keep-alive sockets would otherwise hold the 'close' event, and this exit, open
   // for keepAliveTimeout. The method arrived in Node 18.2.0 while the floor is 18.0.0.
   if (typeof server.closeIdleConnections === 'function') {
     server.closeIdleConnections();
   }
+
+  // Requests already being answered get this long to finish; whatever is still open after
+  // it is ended, so a client that never completes a request cannot hold the exit. The
+  // timer must not keep the process alive by itself.
+  const graceTimer = setTimeout(onShutdownGraceExpired, SHUTDOWN_GRACE_MS);
+  graceTimer.unref();
 }
 
 function start() {
@@ -122,7 +144,8 @@ function start() {
 
   if (resolved.error) {
     console.error(resolved.error);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   port = resolved.port;
