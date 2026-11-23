@@ -115,7 +115,11 @@ function onServerError(error) {
 }
 
 function onShutdownComplete() {
-  process.exitCode = 0;
+  // A completed shutdown must not clear a failure status reported earlier, so 0 is assigned
+  // only when neither onServerError nor start has already written an exit code.
+  if (process.exitCode === undefined) {
+    process.exitCode = 0;
+  }
 }
 
 function onShutdownGraceExpired() {
