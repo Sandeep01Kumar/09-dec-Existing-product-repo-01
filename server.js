@@ -84,6 +84,18 @@ function handleRequest(req, res) {
     handleNotFound(req, res);
   } catch (error) {
     console.error(`Request handling failed: ${error.message}`);
+
+    if (res.writableEnded) {
+      return;
+    }
+
+    // A response whose headers are already sent cannot carry a 500 any more, and leaving it
+    // unterminated would hold its socket, so the begun exchange is torn down instead.
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
+
     sendText(res, 500, 'Internal Server Error');
   }
 }
