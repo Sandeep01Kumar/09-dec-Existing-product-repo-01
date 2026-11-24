@@ -1,11 +1,13 @@
 {
-    "name": "hello_world",
-    "version": "1.0.0",
-    "description": "Hello world in Node.js",
-    "main": "index.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "author": "hxu",
-    "license": "MIT"
+  "name": "nodejs-tutorial-hello-world",
+  "version": "1.0.0",
+  "description": "Minimal Node.js HTTP server tutorial demonstrating single endpoint implementation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["nodejs", "tutorial", "http", "server", "beginner"]
 }
